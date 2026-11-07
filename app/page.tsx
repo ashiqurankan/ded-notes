@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import { Archive, ArrowDown, ArrowLeft, Bold, Check, CheckSquare, ChevronDown, Clock3, Cloud, Command, Download, FileText, Folder, FolderPlus, Hash, Image as ImageIcon, Italic, Laptop, List, ListOrdered, LogOut, Menu, Moon, MoreHorizontal, Pin, Plus, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Type, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, Bold, Check, CheckSquare, ChevronDown, Clock3, Cloud, Command, Download, FileText, Folder, FolderPlus, Hash, Image as ImageIcon, Italic, Laptop, List, ListOrdered, LogOut, Menu, Moon, MoreHorizontal, Pin, Plus, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Type, X } from 'lucide-react';
 import { auth, db, firebaseConfigured, googleProvider } from '@/lib/firebase';
 import { Folder as NoteFolder, Note, View } from '@/lib/types';
 import { plainText, relativeDate } from '@/lib/format';
@@ -335,6 +335,24 @@ export default function Home() {
     setActiveId(null);
   }
 
+  async function emptyTrash() {
+    const trashedNotes = notes.filter(note => note.deleted);
+    if (trashedNotes.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Permanently delete all ${trashedNotes.length} deleted ${trashedNotes.length === 1 ? 'note' : 'notes'}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(trashedNotes.map(note => deleteDoc(doc(db, 'notes', note.id))));
+      setActiveId(null);
+      setNotice(`Permanently deleted ${trashedNotes.length} ${trashedNotes.length === 1 ? 'note' : 'notes'}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not empty Recently deleted.');
+    }
+  }
+
   async function exportNote(format: 'pdf' | 'pages' | 'long') {
     if (!activeNote || exporting) return;
 
@@ -355,11 +373,15 @@ export default function Home() {
         .trim()
         .slice(0, 80) || 'ded-notes';
 
+      const exportColors = dark
+        ? { background: '#1e211d', text: '#eceee8', body: '#dce2d6', muted: '#a0a995', line: '#394236', accent: '#a3b69a', quote: '#bac8b1', code: '#252b23' }
+        : { background: '#ffffff', text: '#252820', body: '#30342d', muted: '#858b7e', line: '#e6e8e2', accent: '#687b62', quote: '#666d60', code: '#f3f4f1' };
+
       exportRoot = document.createElement('div');
       exportRoot.style.cssText = [
         'position:fixed', 'left:-100000px', 'top:0', 'width:794px',
-        'box-sizing:border-box', 'padding:64px 72px', 'background:#ffffff',
-        'color:#252820', 'font-family:Arial,Helvetica,sans-serif',
+        'box-sizing:border-box', 'padding:64px 72px', `background:${exportColors.background}`,
+        `color:${exportColors.text}`, 'font-family:Arial,Helvetica,sans-serif',
         'font-size:15px', 'line-height:1.8', 'overflow:visible',
       ].join(';');
 
@@ -368,26 +390,26 @@ export default function Home() {
       });
       const contentHtml = editor?.getHTML() || activeNote.content || '<p></p>';
       exportRoot.innerHTML = `
-        <div style="font-size:12px;color:#858b7e;margin-bottom:22px">${exportDate}</div>
-        <h1 style="font-family:Arial,Helvetica,sans-serif;font-size:34px;line-height:1.2;letter-spacing:-1px;color:#252820;margin:0 0 24px;font-weight:700;overflow-wrap:anywhere"></h1>
-        <div style="height:1px;background:#e6e8e2;margin:0 0 26px"></div>
+        <div style="font-size:12px;color:${exportColors.muted};margin-bottom:22px">${exportDate}</div>
+        <h1 style="font-family:Arial,Helvetica,sans-serif;font-size:34px;line-height:1.2;letter-spacing:-1px;color:${exportColors.text};margin:0 0 24px;font-weight:700;overflow-wrap:anywhere"></h1>
+        <div style="height:1px;background:${exportColors.line};margin:0 0 26px"></div>
         <article class="ded-export-content">${contentHtml}</article>
         <style>
-          .ded-export-content{font-size:15px;line-height:1.8;color:#30342d;overflow-wrap:anywhere}
+          .ded-export-content{font-size:15px;line-height:1.8;color:${exportColors.body};overflow-wrap:anywhere}
           .ded-export-content p{margin:0 0 16px}
-          .ded-export-content h1,.ded-export-content h2,.ded-export-content h3{font-family:Arial,Helvetica,sans-serif;line-height:1.3;color:#252820;margin:24px 0 12px}
+          .ded-export-content h1,.ded-export-content h2,.ded-export-content h3{font-family:Arial,Helvetica,sans-serif;line-height:1.3;color:${exportColors.text};margin:24px 0 12px}
           .ded-export-content h1{font-size:28px}.ded-export-content h2{font-size:23px}.ded-export-content h3{font-size:19px}
           .ded-export-content ul,.ded-export-content ol{padding-left:26px;margin:10px 0 18px}
           .ded-export-content li{padding-left:4px;margin:4px 0}
-          .ded-export-content a{color:#687b62;text-decoration:underline}
-          .ded-export-content blockquote{border-left:3px solid #9aaa91;margin:18px 0;padding:4px 0 4px 18px;color:#666d60}
+          .ded-export-content a{color:${exportColors.accent};text-decoration:underline}
+          .ded-export-content blockquote{border-left:3px solid ${exportColors.accent};margin:18px 0;padding:4px 0 4px 18px;color:${exportColors.quote}}
           .ded-export-content ul[data-type="taskList"]{list-style:none;padding:0}
           .ded-export-content ul[data-type="taskList"] li{display:flex;align-items:flex-start;gap:9px}
-          .ded-export-content input[type="checkbox"]{margin-top:8px;accent-color:#687b62}
+          .ded-export-content input[type="checkbox"]{margin-top:8px;accent-color:${exportColors.accent}}
           .ded-export-content img{max-width:100%;height:auto}
-          .ded-export-content pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f4f1;padding:14px;border-radius:8px}
+          .ded-export-content pre{white-space:pre-wrap;overflow-wrap:anywhere;background:${exportColors.code};padding:14px;border-radius:8px}
           .ded-export-content code{font-family:monospace}
-          .ded-export-content hr{border:0;border-top:1px solid #e6e8e2;margin:22px 0}
+          .ded-export-content hr{border:0;border-top:1px solid ${exportColors.line};margin:22px 0}
         </style>`;
       const heading = exportRoot.querySelector('h1');
       if (heading) heading.textContent = titleDraft || activeNote.title || 'Untitled note';
@@ -403,7 +425,7 @@ export default function Home() {
       if (document.fonts?.ready) await document.fonts.ready;
 
       const rendered = await html2canvas(exportRoot, {
-        backgroundColor: '#ffffff',
+        backgroundColor: exportColors.background,
         scale: 2,
         useCORS: true,
         allowTaint: false,
@@ -422,7 +444,7 @@ export default function Home() {
         pageCanvas.height = height;
         const context = pageCanvas.getContext('2d');
         if (!context) throw new Error('Could not prepare the export image.');
-        context.fillStyle = '#ffffff';
+        context.fillStyle = exportColors.background;
         context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
         context.drawImage(rendered, 0, y, rendered.width, height, 0, 0, rendered.width, height);
         return pageCanvas;
@@ -750,9 +772,21 @@ export default function Home() {
                 </p>
               </div>
 
-              <button className="create-square" onClick={createNote}>
-                <Plus size={19}/>
-              </button>
+              {view === 'trash' ? (
+                <button
+                  className="empty-trash-button"
+                  onClick={emptyTrash}
+                  disabled={!notes.some(note => note.deleted)}
+                  title="Permanently delete all recently deleted notes"
+                >
+                  <Trash2 size={14}/>
+                  <span>Empty</span>
+                </button>
+              ) : (
+                <button className="create-square" onClick={createNote}>
+                  <Plus size={19}/>
+                </button>
+              )}
             </div>
 
             <div className="search-box">
@@ -923,14 +957,17 @@ export default function Home() {
                     </button>
 
                     <button
-                      className="tool-button"
-                      title="Archive note"
+                      className={`tool-button ${activeNote.archived ? 'is-active' : ''}`}
+                      title={activeNote.archived ? 'Unarchive note' : 'Archive note'}
+                      aria-label={activeNote.archived ? 'Unarchive note' : 'Archive note'}
                       onClick={async () => {
-                        await patchNote({ archived: true });
+                        const nextArchived = !activeNote.archived;
+                        await patchNote({ archived: nextArchived });
                         setActiveId(null);
+                        setNotice(nextArchived ? 'Note archived.' : 'Note unarchived.');
                       }}
                     >
-                      <Archive size={16}/>
+                      {activeNote.archived ? <ArchiveRestore size={16}/> : <Archive size={16}/>}
                     </button>
 
                     <div className="export-wrap">
