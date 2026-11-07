@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.env.local
+.DS_Store
+app/page copy.tsx
+app/page copy.tsx
+
+.env*
+!.env.example
+app/page copy.tsx
