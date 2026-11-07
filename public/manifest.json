@@ -1,6 +1,6 @@
 {
-  "name": "Ded Notes",
-  "short_name": "ded-notes",
+  "name": "ded - notes",
+  "short_name": "ded - notes",
   "description": "A quiet space for everything on your mind.",
   "start_url": "/",
   "display": "standalone",
