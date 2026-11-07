@@ -973,6 +973,27 @@ export default function Home() {
                           }}>
                             <FileText size={15}/> Copy plain text
                           </button>
+
+                          <div className="mobile-export-divider" />
+                          <div className="mobile-export-label">EXPORT NOTE</div>
+                          <button className="mobile-export-action" disabled={exporting} onClick={() => {
+                            setMoreOpen(false);
+                            exportNote('pdf');
+                          }}>
+                            <FileText size={15}/> Export as PDF
+                          </button>
+                          <button className="mobile-export-action" disabled={exporting} onClick={() => {
+                            setMoreOpen(false);
+                            exportNote('pages');
+                          }}>
+                            <ImageIcon size={15}/> One image per page
+                          </button>
+                          <button className="mobile-export-action" disabled={exporting} onClick={() => {
+                            setMoreOpen(false);
+                            exportNote('long');
+                          }}>
+                            <ImageIcon size={15}/> One long image
+                          </button>
                         </div>
                       )}
                     </div>

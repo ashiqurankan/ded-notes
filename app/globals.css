@@ -45,3 +45,64 @@
 :root[data-theme="dark"] .note-list {
   scrollbar-color: #405638 transparent;
 }
+
+
+/* Mobile export actions live inside the overflow menu to protect toolbar space. */
+.mobile-export-divider,
+.mobile-export-label,
+.mobile-export-action {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .editor-toolbar {
+    min-width: 0;
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .editor-tools,
+  .editor-actions {
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .editor-actions {
+    flex: 0 0 auto;
+  }
+
+  .export-wrap {
+    display: none;
+  }
+
+  .more-wrap {
+    flex: 0 0 32px;
+  }
+
+  .more-menu {
+    width: 208px;
+    right: 0;
+    top: 38px;
+  }
+
+  .mobile-export-divider {
+    display: block;
+    height: 1px;
+    background: var(--line);
+    margin: 5px 4px;
+  }
+
+  .mobile-export-label {
+    display: block;
+    padding: 7px 9px 4px;
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+  }
+
+  .more-menu button.mobile-export-action {
+    display: flex;
+  }
+}
