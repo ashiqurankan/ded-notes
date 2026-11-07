@@ -25,7 +25,17 @@ export default function Home() {
   const [view, setView] = useState<View>('all');
   const [folderId, setFolderId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => {
+    // The server renders the boot screen, so reading localStorage here
+    // does not change the initial server/client markup.
+    if (typeof window === 'undefined') return false;
+
+    try {
+      return window.localStorage.getItem('ded-notes-theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
   const [folderModal, setFolderModal] = useState(false);
@@ -156,7 +166,15 @@ export default function Home() {
   }, [activeId, activeNote?.id, activeNote?.title, activeNote?.content, editor]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    const theme = dark ? 'dark' : 'light';
+
+    document.documentElement.dataset.theme = theme;
+
+    try {
+      window.localStorage.setItem('ded-notes-theme', theme);
+    } catch {
+      // Keep the app usable if browser storage is unavailable.
+    }
   }, [dark]);
 
   useEffect(() => {
