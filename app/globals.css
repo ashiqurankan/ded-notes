@@ -8,3 +8,12 @@
 @media(min-width:761px){.workspace .notes-panel{display:flex!important}.workspace .editor-panel{display:flex!important}}
 
 .folder-select-wrap{display:flex;align-items:center;gap:5px;color:var(--muted);padding:0 6px}.folder-select{max-width:100px;border:0;outline:0;background:transparent;color:var(--muted);font-size:10px;cursor:pointer}.folder-select option{background:var(--panel);color:var(--text)}@media(max-width:760px){.folder-select{max-width:72px}.folder-select-wrap{gap:2px;padding:0 2px}}
+
+/* Add these rules to the END of app/globals.css */
+.export-wrap{position:relative}
+.export-trigger{display:flex;grid-auto-flow:column;align-items:center;gap:6px;padding:0 9px;font-size:10px}
+.export-menu{position:absolute;z-index:12;right:0;top:36px;width:190px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow)}
+.export-menu button{width:100%;height:36px;border:0;background:transparent;border-radius:6px;display:flex;align-items:center;gap:9px;padding:0 9px;color:var(--text);font-size:11px;text-align:left}
+.export-menu button:hover{background:var(--soft)}
+.export-trigger:disabled{opacity:.55;cursor:wait}
+@media(max-width:760px){.export-trigger{min-width:30px;padding:0 7px}.export-trigger span{display:none}.export-menu{right:-38px}}

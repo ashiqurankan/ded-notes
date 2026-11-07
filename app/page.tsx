@@ -9,7 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import { Archive, ArrowDown, ArrowLeft, Bold, Check, CheckSquare, ChevronDown, Clock3, Cloud, Command, FileText, Folder, FolderPlus, Hash, Italic, Laptop, List, ListOrdered, LogOut, Menu, Moon, MoreHorizontal, Pin, Plus, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Type, X } from 'lucide-react';
+import { Archive, ArrowDown, ArrowLeft, Bold, Check, CheckSquare, ChevronDown, Clock3, Cloud, Command, Download, FileText, Folder, FolderPlus, Hash, Image as ImageIcon, Italic, Laptop, List, ListOrdered, LogOut, Menu, Moon, MoreHorizontal, Pin, Plus, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Type, X } from 'lucide-react';
 import { auth, db, firebaseConfigured, googleProvider } from '@/lib/firebase';
 import { Folder as NoteFolder, Note, View } from '@/lib/types';
 import { plainText, relativeDate } from '@/lib/format';
@@ -41,6 +41,8 @@ export default function Home() {
   const [folderModal, setFolderModal] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -331,6 +333,148 @@ export default function Home() {
   async function permanentlyDelete(note: Note) {
     await deleteDoc(doc(db, 'notes', note.id));
     setActiveId(null);
+  }
+
+  async function exportNote(format: 'pdf' | 'pages' | 'long') {
+    if (!activeNote || exporting) return;
+
+    setExporting(true);
+    setExportOpen(false);
+
+    let exportRoot: HTMLDivElement | null = null;
+
+    try {
+      const [{ default: html2canvas }, { jsPDF }, { default: JSZip }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+        import('jszip'),
+      ]);
+
+      const safeTitle = (titleDraft || activeNote.title || 'ded-notes')
+        .replace(/[\\/:*?"<>|]+/g, '-')
+        .trim()
+        .slice(0, 80) || 'ded-notes';
+
+      exportRoot = document.createElement('div');
+      exportRoot.style.cssText = [
+        'position:fixed', 'left:-100000px', 'top:0', 'width:794px',
+        'box-sizing:border-box', 'padding:64px 72px', 'background:#ffffff',
+        'color:#252820', 'font-family:Arial,Helvetica,sans-serif',
+        'font-size:15px', 'line-height:1.8', 'overflow:visible',
+      ].join(';');
+
+      const exportDate = new Date(activeNote.createdAt).toLocaleDateString(undefined, {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+      });
+      const contentHtml = editor?.getHTML() || activeNote.content || '<p></p>';
+      exportRoot.innerHTML = `
+        <div style="font-size:12px;color:#858b7e;margin-bottom:22px">${exportDate}</div>
+        <h1 style="font-family:Arial,Helvetica,sans-serif;font-size:34px;line-height:1.2;letter-spacing:-1px;color:#252820;margin:0 0 24px;font-weight:700;overflow-wrap:anywhere"></h1>
+        <div style="height:1px;background:#e6e8e2;margin:0 0 26px"></div>
+        <article class="ded-export-content">${contentHtml}</article>
+        <style>
+          .ded-export-content{font-size:15px;line-height:1.8;color:#30342d;overflow-wrap:anywhere}
+          .ded-export-content p{margin:0 0 16px}
+          .ded-export-content h1,.ded-export-content h2,.ded-export-content h3{font-family:Arial,Helvetica,sans-serif;line-height:1.3;color:#252820;margin:24px 0 12px}
+          .ded-export-content h1{font-size:28px}.ded-export-content h2{font-size:23px}.ded-export-content h3{font-size:19px}
+          .ded-export-content ul,.ded-export-content ol{padding-left:26px;margin:10px 0 18px}
+          .ded-export-content li{padding-left:4px;margin:4px 0}
+          .ded-export-content a{color:#687b62;text-decoration:underline}
+          .ded-export-content blockquote{border-left:3px solid #9aaa91;margin:18px 0;padding:4px 0 4px 18px;color:#666d60}
+          .ded-export-content ul[data-type="taskList"]{list-style:none;padding:0}
+          .ded-export-content ul[data-type="taskList"] li{display:flex;align-items:flex-start;gap:9px}
+          .ded-export-content input[type="checkbox"]{margin-top:8px;accent-color:#687b62}
+          .ded-export-content img{max-width:100%;height:auto}
+          .ded-export-content pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f4f1;padding:14px;border-radius:8px}
+          .ded-export-content code{font-family:monospace}
+          .ded-export-content hr{border:0;border-top:1px solid #e6e8e2;margin:22px 0}
+        </style>`;
+      const heading = exportRoot.querySelector('h1');
+      if (heading) heading.textContent = titleDraft || activeNote.title || 'Untitled note';
+      document.body.appendChild(exportRoot);
+
+      await Promise.all(Array.from(exportRoot.querySelectorAll('img')).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise<void>(resolve => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      }));
+      if (document.fonts?.ready) await document.fonts.ready;
+
+      const rendered = await html2canvas(exportRoot, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        windowWidth: 794,
+      });
+
+      const pagePixelHeight = Math.floor(rendered.width * 297 / 210);
+      const pageCount = Math.max(1, Math.ceil(rendered.height / pagePixelHeight));
+
+      const makePageCanvas = (pageIndex: number) => {
+        const y = pageIndex * pagePixelHeight;
+        const height = Math.min(pagePixelHeight, rendered.height - y);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = rendered.width;
+        pageCanvas.height = height;
+        const context = pageCanvas.getContext('2d');
+        if (!context) throw new Error('Could not prepare the export image.');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        context.drawImage(rendered, 0, y, rendered.width, height, 0, 0, rendered.width, height);
+        return pageCanvas;
+      };
+
+      const downloadBlob = (blob: Blob, filename: string) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      };
+
+      if (format === 'long') {
+        const blob = await new Promise<Blob>((resolve, reject) =>
+          rendered.toBlob(result => result ? resolve(result) : reject(new Error('Could not create the image.')), 'image/png')
+        );
+        downloadBlob(blob, `${safeTitle}-long.png`);
+      } else if (format === 'pages') {
+        const zip = new JSZip();
+        for (let index = 0; index < pageCount; index++) {
+          const pageCanvas = makePageCanvas(index);
+          const blob = await new Promise<Blob>((resolve, reject) =>
+            pageCanvas.toBlob(result => result ? resolve(result) : reject(new Error('Could not create a page image.')), 'image/png')
+          );
+          zip.file(`${safeTitle}-page-${String(index + 1).padStart(2, '0')}.png`, blob);
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(blob, `${safeTitle}-pages.zip`);
+      } else {
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        for (let index = 0; index < pageCount; index++) {
+          const pageCanvas = makePageCanvas(index);
+          const image = pageCanvas.toDataURL('image/jpeg', 0.94);
+          const heightMm = pageCanvas.height * 210 / pageCanvas.width;
+          if (index > 0) pdf.addPage();
+          pdf.addImage(image, 'JPEG', 0, 0, 210, heightMm, undefined, 'FAST');
+        }
+        pdf.save(`${safeTitle}.pdf`);
+      }
+
+      setNotice(format === 'pdf' ? 'PDF exported.' : format === 'pages' ? 'Page images exported as a ZIP.' : 'Long image exported.');
+    } catch (error) {
+      console.error('Note export failed:', error);
+      setNotice(error instanceof Error ? `Export failed: ${error.message}` : 'Export failed. Please try again.');
+    } finally {
+      exportRoot?.remove();
+      setExporting(false);
+    }
   }
 
   const visibleNotes = useMemo(() => notes.filter(n => {
@@ -788,6 +932,25 @@ export default function Home() {
                     >
                       <Archive size={16}/>
                     </button>
+
+                    <div className="export-wrap">
+                      <button
+                        className="tool-button export-trigger"
+                        title="Export note"
+                        disabled={exporting}
+                        onClick={() => setExportOpen(!exportOpen)}
+                      >
+                        <Download size={16}/>
+                        <span>{exporting ? 'Exporting…' : 'Export'}</span>
+                      </button>
+                      {exportOpen && (
+                        <div className="export-menu">
+                          <button onClick={() => exportNote('pdf')}><FileText size={15}/> Export as PDF</button>
+                          <button onClick={() => exportNote('pages')}><ImageIcon size={15}/> One image per page</button>
+                          <button onClick={() => exportNote('long')}><ImageIcon size={15}/> One long image</button>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="more-wrap">
                       <button className="tool-button" onClick={() => setMoreOpen(!moreOpen)}>
