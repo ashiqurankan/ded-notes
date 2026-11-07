@@ -106,3 +106,87 @@
     display: flex;
   }
 }
+
+
+/* Mobile toolbar: keep controls in distinct lanes; scroll formatting tools instead of overlapping actions. */
+@media (max-width: 760px) {
+  .editor-toolbar {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 7px;
+    overflow: hidden;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .editor-tools {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .editor-tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  .editor-tools > *,
+  .editor-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .editor-tools .mobile-back {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    flex: 0 0 32px;
+    margin-right: 2px;
+    background: var(--panel);
+  }
+
+  .editor-actions {
+    display: flex;
+    flex: 0 0 auto;
+    min-width: max-content;
+    gap: 2px;
+  }
+
+  .folder-select-wrap {
+    max-width: 78px;
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 0 2px;
+  }
+
+  .folder-select {
+    width: 54px;
+    max-width: 54px;
+    font-size: 9px;
+  }
+
+  .editor-actions .tool-button,
+  .editor-tools .tool-button {
+    width: 30px;
+    min-width: 30px;
+    padding: 0;
+  }
+
+  .more-wrap {
+    position: relative;
+    flex: 0 0 32px;
+  }
+
+  .more-menu {
+    position: fixed;
+    top: 166px;
+    right: 8px;
+    width: min(220px, calc(100vw - 24px));
+    z-index: 50;
+  }
+}
