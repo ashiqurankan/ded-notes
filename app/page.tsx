@@ -4,17 +4,33 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
 import { EditorContent, useEditor } from '@tiptap/react';
+import { Mark } from '@tiptap/core';
 import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, Bold, Check, CheckSquare, ChevronDown, Clock3, Cloud, Command, Download, FileText, Folder, FolderPlus, Hash, Image as ImageIcon, Italic, Laptop, List, ListOrdered, LogOut, Menu, Moon, MoreHorizontal, Pin, Plus, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Type, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowLeft, Bold, Check, CheckSquare, ChevronDown, Clock3, Cloud, Command, Download, FileText, Folder, FolderPlus, Hash, Image as ImageIcon, Italic, Laptop, List, ListOrdered, LogOut, Menu, Moon, MoreHorizontal, Pin, Plus, Search, Settings2, ShieldCheck, Sparkles, Sun, Trash2, Type, X, Printer, GripVertical } from 'lucide-react';
 import { auth, db, firebaseConfigured, googleProvider } from '@/lib/firebase';
 import { Folder as NoteFolder, Note, View } from '@/lib/types';
 import { plainText, relativeDate } from '@/lib/format';
 
-const starterContent = '<p>Every good idea starts somewhere.</p><p>Use this space to collect thoughts, make plans, and keep the little things from slipping away.</p>';
+const starterContent = '<p></p>';
+
+const FontSize = Mark.create({
+  name: 'fontSize',
+  addAttributes() {
+    return {
+      fontSize: {
+        default: null,
+        parseHTML: element => (element as HTMLElement).style.fontSize || null,
+        renderHTML: attributes => attributes.fontSize ? { style: `font-size: ${attributes.fontSize}` } : {},
+      },
+    };
+  },
+  parseHTML() { return [{ tag: 'span[style*=\"font-size\"]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['span', HTMLAttributes, 0]; },
+});
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -46,12 +62,15 @@ export default function Home() {
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [draftNote, setDraftNote] = useState<Note | null>(null);
+  const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChanges = useRef<Record<string, { title?: string; content?: string }>>({});
   const editorRef = useRef<Editor | null>(null);
   const activeIdRef = useRef<string | null>(activeId);
   activeIdRef.current = activeId;
-  const activeNote = notes.find(n => n.id === activeId) || null;
+  const activeNote = notes.find(n => n.id === activeId) || (draftNote?.id === activeId ? draftNote : null);
 
   useEffect(() => onAuthStateChanged(auth, u => { setUser(u); setAuthReady(true); }), []);
 
@@ -89,7 +108,7 @@ export default function Home() {
       setNotes(list);
 
       setActiveId(current =>
-        current && list.some(n => n.id === current)
+        current && (current.startsWith('draft-') || list.some(n => n.id === current))
           ? current
           : (list.find(n => !n.deleted && !n.archived)?.id || null)
       );
@@ -100,7 +119,7 @@ export default function Home() {
       snap => setFolders(
         snap.docs
           .map(d => ({ id: d.id, ...d.data() } as NoteFolder))
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999) || a.name.localeCompare(b.name))
       ),
       e => setNotice(e.message)
     );
@@ -114,6 +133,7 @@ export default function Home() {
   const editor = useEditor({
     extensions: [
       StarterKit,
+      FontSize,
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,
       TaskItem.configure({ nested: true })
@@ -214,80 +234,81 @@ export default function Home() {
   }, []);
 
   function scheduleSave(id: string, title?: string, content?: string) {
-    // Merge title and body edits for the same note.
     const existing = pendingChanges.current[id] || {};
-
     pendingChanges.current[id] = {
       ...existing,
       ...(title !== undefined ? { title } : {}),
       ...(content !== undefined ? { content } : {}),
     };
-
     if (saveTimer.current) clearTimeout(saveTimer.current);
-
     setSaving(true);
-
     saveTimer.current = setTimeout(async () => {
       saveTimer.current = null;
-
       const batch = pendingChanges.current;
       pendingChanges.current = {};
-
       try {
-        await Promise.all(
-          Object.entries(batch).map(([noteId, patch]) =>
-            updateDoc(doc(db, 'notes', noteId), {
-              ...patch,
+        await Promise.all(Object.entries(batch).map(async ([noteId, patch]) => {
+          if (noteId.startsWith('draft-')) {
+            const draft = draftNote;
+            if (!draft || draft.id !== noteId) return;
+            const nextTitle = patch.title ?? draft.title;
+            const nextContent = patch.content ?? draft.content;
+            const hasTitle = nextTitle.trim() !== '' && nextTitle.trim() !== 'Untitled note';
+            const hasBody = plainText(nextContent).trim().length > 0;
+            if (!hasTitle && !hasBody) return;
+            const ref = await addDoc(collection(db, 'notes'), {
+              ownerId: draft.ownerId,
+              title: nextTitle.trim() || 'Untitled note',
+              content: nextContent || '<p></p>',
+              folderId: draft.folderId,
+              pinned: false,
+              pinnedOrder: 0,
+              archived: false,
+              deleted: false,
+              tags: [],
+              createdAt: draft.createdAt,
               updatedAt: Date.now(),
-            })
-          )
-        );
+            });
+            setDraftNote(null);
+            setActiveId(ref.id);
+            setNotes(current => [...current, { ...draft, id: ref.id, title: nextTitle.trim() || 'Untitled note', content: nextContent, updatedAt: Date.now() }]);
+          } else {
+            await updateDoc(doc(db, 'notes', noteId), { ...patch, updatedAt: Date.now() });
+          }
+        }));
       } catch (e) {
-        // Restore failed fields while preserving newer edits.
         for (const [noteId, failedPatch] of Object.entries(batch)) {
-          pendingChanges.current[noteId] = {
-            ...failedPatch,
-            ...pendingChanges.current[noteId],
-          };
+          pendingChanges.current[noteId] = { ...failedPatch, ...pendingChanges.current[noteId] };
         }
-
         setNotice(e instanceof Error ? e.message : 'Could not save note.');
       } finally {
-        if (!saveTimer.current && Object.keys(pendingChanges.current).length === 0) {
-          setSaving(false);
-        } else if (!saveTimer.current && Object.keys(pendingChanges.current).length > 0) {
-          setSaving(false);
-        }
+        setSaving(Object.keys(pendingChanges.current).length > 0);
       }
     }, 550);
   }
 
   async function createNote() {
     if (!user) return;
-
     const now = Date.now();
-
-    try {
-      const ref = await addDoc(collection(db, 'notes'), {
-        ownerId: user.uid,
-        title: 'Untitled note',
-        content: '<p></p>',
-        folderId: view === 'folder' ? folderId : null,
-        pinned: false,
-        archived: false,
-        deleted: false,
-        tags: [],
-        createdAt: now,
-        updatedAt: now
-      });
-
-      setView('all');
-      setActiveId(ref.id);
-      setMobileEditorOpen(true);
-      setSidebarOpen(false);
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : 'Could not create note.');
-    }
+    const draft: Note = {
+      id: `draft-${now}`,
+      ownerId: user.uid,
+      title: 'Untitled note',
+      content: '<p></p>',
+      folderId: view === 'folder' ? folderId : null,
+      pinned: false,
+      archived: false,
+      deleted: false,
+      tags: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    setDraftNote(draft);
+    setTitleDraft(draft.title);
+    setView('all');
+    setActiveId(draft.id);
+    setMobileEditorOpen(true);
+    setSidebarOpen(false);
   }
 
   async function createFolder() {
@@ -298,11 +319,57 @@ export default function Home() {
     await addDoc(collection(db, 'folders'), {
       ownerId: user.uid,
       name,
+      sortOrder: folders.length,
       createdAt: Date.now()
     });
 
     setFolderName('');
     setFolderModal(false);
+  }
+
+  async function deleteFolder(folder: NoteFolder) {
+    const count = notes.filter(note => note.folderId === folder.id && !note.deleted).length;
+    const confirmed = window.confirm(`Delete folder “${folder.name}”? ${count ? `${count} note(s) will be moved to No folder.` : 'This folder is empty.'}`);
+    if (!confirmed) return;
+    try {
+      await Promise.all(notes.filter(note => note.folderId === folder.id).map(note =>
+        updateDoc(doc(db, 'notes', note.id), { folderId: null, updatedAt: Date.now() })
+      ));
+      await deleteDoc(doc(db, 'folders', folder.id));
+      if (folderId === folder.id) { setFolderId(null); setView('all'); }
+      setNotice('Folder deleted. Its notes were kept in All notes.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not delete folder.');
+    }
+  }
+
+  async function reorderPinned(targetId: string) {
+    if (!draggedNoteId || draggedNoteId === targetId) return;
+    const pinned = notes.filter(n => n.pinned && !n.archived && !n.deleted).sort((a,b) => (a.pinnedOrder ?? 999999) - (b.pinnedOrder ?? 999999));
+    const from = pinned.findIndex(n => n.id === draggedNoteId);
+    const to = pinned.findIndex(n => n.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = pinned.splice(from, 1);
+    pinned.splice(to, 0, moved);
+    setNotes(current => current.map(n => {
+      const index = pinned.findIndex(p => p.id === n.id);
+      return index >= 0 ? { ...n, pinnedOrder: index } : n;
+    }));
+    await Promise.all(pinned.map((n, index) => updateDoc(doc(db, 'notes', n.id), { pinnedOrder: index })));
+    setDraggedNoteId(null);
+  }
+
+  async function reorderFolders(targetId: string) {
+    if (!draggedFolderId || draggedFolderId === targetId) return;
+    const ordered = [...folders].sort((a,b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999));
+    const from = ordered.findIndex(f => f.id === draggedFolderId);
+    const to = ordered.findIndex(f => f.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    setFolders(ordered.map((f, sortOrder) => ({ ...f, sortOrder })));
+    await Promise.all(ordered.map((f, sortOrder) => updateDoc(doc(db, 'folders', f.id), { sortOrder })));
+    setDraggedFolderId(null);
   }
 
   async function patchNote(patch: Partial<Note>) {
@@ -321,6 +388,8 @@ export default function Home() {
     });
 
     setActiveId(null);
+    setMobileEditorOpen(false);
+    setView('all');
   }
 
   async function restoreNote(note: Note) {
@@ -355,6 +424,7 @@ export default function Home() {
 
   async function exportNote(format: 'pdf' | 'pages' | 'long') {
     if (!activeNote || exporting) return;
+    if (activeNote.id.startsWith('draft-')) { setNotice('Write something before exporting this note.'); return; }
 
     setExporting(true);
     setExportOpen(false);
@@ -441,7 +511,7 @@ export default function Home() {
         const height = Math.min(pagePixelHeight, rendered.height - y);
         const pageCanvas = document.createElement('canvas');
         pageCanvas.width = rendered.width;
-        pageCanvas.height = height;
+        pageCanvas.height = pagePixelHeight;
         const context = pageCanvas.getContext('2d');
         if (!context) throw new Error('Could not prepare the export image.');
         context.fillStyle = exportColors.background;
@@ -482,9 +552,8 @@ export default function Home() {
         for (let index = 0; index < pageCount; index++) {
           const pageCanvas = makePageCanvas(index);
           const image = pageCanvas.toDataURL('image/jpeg', 0.94);
-          const heightMm = pageCanvas.height * 210 / pageCanvas.width;
           if (index > 0) pdf.addPage();
-          pdf.addImage(image, 'JPEG', 0, 0, 210, heightMm, undefined, 'FAST');
+          pdf.addImage(image, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
         }
         pdf.save(`${safeTitle}.pdf`);
       }
@@ -659,17 +728,15 @@ export default function Home() {
           </div>
 
           {folders.map(f => (
-            <NavButton
-              key={f.id}
-              icon={<Folder/>}
-              label={f.name}
-              active={view === 'folder' && folderId === f.id}
-              onClick={() => {
-                setView('folder');
-                setFolderId(f.id);
-                setSidebarOpen(false);
-              }}
-            />
+            <div key={f.id} className="folder-row" draggable onDragStart={() => setDraggedFolderId(f.id)} onDragOver={e => e.preventDefault()} onDrop={() => reorderFolders(f.id)}>
+              <NavButton
+                icon={<Folder/>}
+                label={f.name}
+                active={view === 'folder' && folderId === f.id}
+                onClick={() => { setView('folder'); setFolderId(f.id); setSidebarOpen(false); }}
+              />
+              <button className="folder-delete-button" title={`Delete ${f.name}`} aria-label={`Delete ${f.name}`} onClick={() => deleteFolder(f)}><Trash2 size={13}/></button>
+            </div>
           ))}
 
           {folders.length === 0 && (
@@ -825,6 +892,10 @@ export default function Home() {
                   <button
                     key={note.id}
                     className={`note-card ${activeId === note.id ? 'selected' : ''}`}
+                    draggable={view === 'all' && note.pinned}
+                    onDragStart={() => note.pinned && setDraggedNoteId(note.id)}
+                    onDragOver={e => { if (draggedNoteId) e.preventDefault(); }}
+                    onDrop={e => { e.preventDefault(); reorderPinned(note.id); }}
                     onClick={() => {
                       setActiveId(note.id);
                       setMobileEditorOpen(true);
@@ -899,13 +970,27 @@ export default function Home() {
 
                     <span className="tool-divider"/>
 
-                    <button
-                      className="tool-button"
-                      title="Heading"
-                      onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                    <select
+                      className="font-size-select"
+                      title="Text size"
+                      aria-label="Text size"
+                      defaultValue="16px"
+                      onChange={e => {
+                        const size = e.target.value;
+                        if (size === 'default') editor?.chain().focus().unsetMark('fontSize').run();
+                        else editor?.chain().focus().setMark('fontSize', { fontSize: size }).run();
+                      }}
                     >
-                      <Type size={17}/>
-                    </button>
+                      <option value="default">T</option>
+                      <option value="12px">12</option>
+                      <option value="14px">14</option>
+                      <option value="16px">16</option>
+                      <option value="18px">18</option>
+                      <option value="20px">20</option>
+                      <option value="24px">24</option>
+                      <option value="28px">28</option>
+                      <option value="32px">32</option>
+                    </select>
 
                     <button
                       className="tool-button"
@@ -951,7 +1036,7 @@ export default function Home() {
                     <button
                       className={`tool-button ${activeNote.pinned ? 'is-active' : ''}`}
                       title="Pin note"
-                      onClick={() => patchNote({ pinned: !activeNote.pinned })}
+                      onClick={() => patchNote({ pinned: !activeNote.pinned, pinnedOrder: activeNote.pinned ? activeNote.pinnedOrder : notes.filter(n => n.pinned && !n.deleted && !n.archived).length })}
                     >
                       <Pin size={16}/>
                     </button>
@@ -964,6 +1049,8 @@ export default function Home() {
                         const nextArchived = !activeNote.archived;
                         await patchNote({ archived: nextArchived });
                         setActiveId(null);
+                        setMobileEditorOpen(false);
+                        setView('all');
                         setNotice(nextArchived ? 'Note archived.' : 'Note unarchived.');
                       }}
                     >
@@ -1009,6 +1096,9 @@ export default function Home() {
                             setNotice('Note copied to clipboard.');
                           }}>
                             <FileText size={15}/> Copy plain text
+                          </button>
+                          <button onClick={() => { setMoreOpen(false); window.print(); }}>
+                            <Printer size={15}/> Print preview / Print
                           </button>
 
                           <div className="mobile-export-divider" />

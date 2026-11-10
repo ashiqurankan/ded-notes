@@ -215,3 +215,42 @@
   opacity: .4;
   cursor: not-allowed;
 }
+
+/* Folder management and ordering */
+.folder-row { display:flex; align-items:center; gap:2px; min-width:0; }
+.folder-row > .nav-button { min-width:0; flex:1; }
+.folder-delete-button { flex:0 0 26px; width:26px; height:28px; display:grid; place-items:center; border:0; border-radius:6px; background:transparent; color:var(--muted); opacity:0; transition:opacity .15s,background .15s,color .15s; }
+.folder-row:hover .folder-delete-button,.folder-row:focus-within .folder-delete-button { opacity:1; }
+.folder-delete-button:hover { color:#b76d64; background:rgba(183,109,100,.09); }
+.folder-row[draggable="true"] { cursor:grab; }
+.note-card[draggable="true"] { cursor:grab; }
+.note-card[draggable="true"]:active,.folder-row[draggable="true"]:active { cursor:grabbing; }
+
+/* Minimal text-size control */
+.font-size-select { height:30px; min-width:34px; max-width:48px; padding:0 3px; border:0; border-radius:6px; outline:0; background:transparent; color:var(--muted); font:600 11px 'DM Sans',sans-serif; cursor:pointer; }
+.font-size-select:focus,.font-size-select:hover { background:var(--soft); color:var(--text); }
+.font-size-select option { background:var(--panel); color:var(--text); }
+
+/* Print preview: browser print dialog displays real pagination and page breaks. */
+@page { size:A4 portrait; margin:18mm 18mm 20mm; }
+@media print {
+  html,body { width:210mm!important; min-height:0!important; background:#fff!important; color:#111!important; }
+  body * { visibility:hidden!important; }
+  .editor-panel,.editor-content,.editor-content * { visibility:visible!important; }
+  .app-shell,.main-area,.workspace,.editor-panel { height:auto!important; min-height:0!important; overflow:visible!important; display:block!important; background:#fff!important; }
+  .sidebar,.topbar,.notes-panel,.editor-toolbar,.editor-bottom,.scrim,.toast { display:none!important; }
+  .editor-content { width:100%!important; max-width:none!important; height:auto!important; max-height:none!important; overflow:visible!important; margin:0!important; padding:0!important; background:#fff!important; color:#111!important; }
+  .note-date { color:#666!important; }
+  .note-title-input { color:#111!important; font-size:25pt!important; }
+  .editor-separator { background:#ddd!important; }
+  .editor-prose { color:#111!important; font-size:11pt!important; line-height:1.6!important; }
+  .editor-prose a { color:#345b36!important; }
+  .editor-prose blockquote { break-inside:avoid; }
+  .editor-prose img { max-width:100%!important; break-inside:avoid; }
+  .editor-prose pre,.editor-prose table,.editor-prose blockquote { break-inside:avoid; }
+  .editor-prose h1,.editor-prose h2,.editor-prose h3 { break-after:avoid; }
+}
+
+@media (max-width:760px) {
+  .folder-delete-button { opacity:.72; }
+}
