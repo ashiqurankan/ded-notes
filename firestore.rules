@@ -1,19 +1,58 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /notes/{noteId} {
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
-      allow read, delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
-      allow update: if request.auth != null
-        && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId;
+
+    function signedIn() { return request.auth != null; }
+
+    function validNote(d) {
+      return d.ownerId is string
+        && (!('title' in d) || (d.title is string && d.title.size() <= 1000))
+        && (!('content' in d) || (d.content is string && d.content.size() <= 900000))
+        && (!('tags' in d) || (d.tags is list && d.tags.size() <= 50))
+        && (!('folderId' in d) || d.folderId == null || d.folderId is string)
+        && (!('pinned' in d) || d.pinned is bool)
+        && (!('archived' in d) || d.archived is bool)
+        && (!('deleted' in d) || d.deleted is bool);
     }
-    match /folders/{folderId} {
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
-      allow read, delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
-      allow update: if request.auth != null
+
+    function validFolder(d) {
+      return d.ownerId is string && d.name is string && d.name.size() > 0 && d.name.size() <= 100;
+    }
+
+    match /notes/{noteId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && validNote(request.resource.data);
+      allow read, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn()
         && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId;
+        && request.resource.data.ownerId == resource.data.ownerId
+        && validNote(request.resource.data);
+
+      // Version history snapshots. Only the note's owner can read or write them.
+      match /versions/{versionId} {
+        function ownsNote() {
+          return signedIn()
+            && get(/databases/$(database)/documents/notes/$(noteId)).data.ownerId == request.auth.uid;
+        }
+        allow read, delete: if ownsNote();
+        allow create: if ownsNote()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.content is string
+          && request.resource.data.content.size() <= 900000;
+        allow update: if false;
+      }
+    }
+
+    match /folders/{folderId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && validFolder(request.resource.data);
+      allow read, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && validFolder(request.resource.data);
     }
   }
 }

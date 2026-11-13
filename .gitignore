@@ -1,11 +1,12 @@
 node_modules
 .next
 out
-.env.local
+.vercel
 .DS_Store
-app/page copy.tsx
-app/page copy.tsx
+*.tsbuildinfo
 
 .env*
 !.env.example
-app/page copy.tsx
+
+# Firebase emulator logs
+*-debug.log
