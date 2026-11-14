@@ -392,14 +392,23 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .note-card-wrap.swiping { overflow: hidden; }
 .swipe-reveal {
   position: absolute; inset: 0;
-  display: flex; align-items: center; gap: 7px;
-  padding: 0 18px; border-radius: 10px;
-  font-size: 12.5px; font-weight: 600; color: #fff;
+  display: flex; align-items: center;
+  margin: 0; padding: 0; border: 0; border-radius: 10px;
+  font: inherit; font-size: 12px; font-weight: 600; color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s;
 }
-.swipe-reveal.left { justify-content: flex-end; background: color-mix(in srgb, var(--danger) 70%, var(--bg)); }
-.swipe-reveal.right { justify-content: flex-start; background: color-mix(in srgb, var(--accent) 70%, var(--bg)); }
-.swipe-reveal.armed.left { background: var(--danger); }
-.swipe-reveal.armed.right { background: var(--brand); }
+.swipe-reveal.left { justify-content: flex-end; background: color-mix(in srgb, var(--danger) 75%, var(--bg)); }
+.swipe-reveal.right { justify-content: flex-start; background: color-mix(in srgb, var(--accent) 75%, var(--bg)); }
+.swipe-reveal.open.left, .swipe-reveal.armed.left { background: var(--danger); }
+.swipe-reveal.open.right, .swipe-reveal.armed.right { background: var(--brand); }
+.swipe-action {
+  width: 88px; flex: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.swipe-reveal.armed .swipe-action { transform: scale(1.08); }
+.swipe-action { transition: transform .15s; }
 
 .note-card {
   position: relative;
@@ -411,12 +420,12 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   padding: 12px 12px 10px;
   color: var(--text);
   cursor: default;
-  transition: background .15s, border-color .15s;
+  transition: background .15s, border-color .15s, transform .22s cubic-bezier(.22,.8,.3,1);
   touch-action: pan-y;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
 }
-.note-card-wrap.swiping .note-card { transition: none; }
+.note-card-wrap.dragging .note-card { transition: none; }
 .note-card.selected { background: var(--panel); border-color: var(--selected-line); box-shadow: 0 3px 10px #26351b0a; }
 .note-card.checked { background: var(--accent-pale); border-color: transparent; }
 .note-card[draggable="true"] { cursor: grab; }
