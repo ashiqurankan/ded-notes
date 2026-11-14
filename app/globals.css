@@ -624,6 +624,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .popover-menu {
   position: fixed; z-index: 60;
   padding: 5px;
+  background: var(--panel); /* fallback for Safari < 16.2 (no color-mix) */
   background: color-mix(in srgb, var(--panel) 94%, transparent);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
@@ -634,6 +635,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   animation: menu-in .12s ease-out;
 }
 @keyframes menu-in { from { opacity: 0; transform: scale(.97); } }
+@keyframes menu-fade { from { opacity: 0; } }
 .popover-menu button {
   width: 100%; min-height: 32px;
   border: 0; background: transparent; border-radius: 6px;
@@ -645,7 +647,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .popover-menu button.danger { color: var(--danger); }
 .popover-menu button:disabled { opacity: .4; }
 .menu-icon { width: 16px; display: grid; place-items: center; flex: 0 0 16px; color: inherit; opacity: .85; }
-.menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-label { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; -webkit-text-fill-color: currentColor; }
 .menu-divider { height: 1px; background: var(--line); margin: 5px 6px; }
 .menu-heading { padding: 7px 9px 4px; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -819,6 +821,18 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   .tool-button { height: 40px; min-width: 40px; }
   .create-square { width: 40px; height: 40px; }
   .popover-menu button { min-height: 44px; font-size: 15px; }
+  /* iOS Safari can fail to paint the text inside a blurred (backdrop-filter), scrollable,
+     animated layer — the icons show but the labels vanish. Touch menus use a solid
+     panel, a plain fade, and only become scroll containers when they actually overflow. */
+  .popover-menu {
+    background: var(--panel);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    overflow-y: visible;
+    animation-name: menu-fade;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .popover-menu.scrolls { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .note-card { padding: 13px 13px 11px; }
   .note-card-title { font-size: 15px; }
   .note-preview { font-size: 13.5px; }

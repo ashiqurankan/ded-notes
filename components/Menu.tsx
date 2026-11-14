@@ -23,7 +23,7 @@ export function Menu({ items, anchor, point, onClose, width = 210, label }: {
   label?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; scrolls: boolean } | null>(null);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -48,7 +48,7 @@ export function Menu({ items, anchor, point, onClose, width = 210, label }: {
     }
     left = Math.max(8, Math.min(left, vw - w - 8));
     top = Math.max(8, Math.min(top, vh - h - 8));
-    setPos({ left, top });
+    setPos({ left, top, scrolls: h > vh - 16 });
     el.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
   }, [anchor, point]);
 
@@ -86,7 +86,7 @@ export function Menu({ items, anchor, point, onClose, width = 210, label }: {
   return createPortal(
     <div
       ref={ref}
-      className="popover-menu"
+      className={`popover-menu ${pos?.scrolls ? 'scrolls' : ''}`}
       role="menu"
       aria-label={label}
       style={{ width, left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
