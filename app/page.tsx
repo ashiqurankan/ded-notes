@@ -46,6 +46,11 @@ const SAVE_DELAY = 600;
 const VERSION_INTERVAL = 10 * 60_000;
 const TRASH_DAYS = 30;
 const MAX_CONTENT = 900_000;
+
+/** No title, no text and no image/divider: an empty list or checklist item counts as blank. */
+function isBlankNote(title: string, content: string) {
+  return !title.trim() && !plainText(content).trim() && !/<(img|hr)\b/i.test(content);
+}
 const SESSION_KEY = 'ded-notes-session';
 const THEME_KEY = 'ded-notes-theme';
 const DEVICE_KEY = 'ded-notes-device';
@@ -234,6 +239,11 @@ export default function Home() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef<Note | null>(null);
   const persisted = useRef(new Set<string>());
+  // Notes created with "New note" in this session, and their latest title/content. If one
+  // is left without any text it is removed instead of being kept as an empty note.
+  const freshIds = useRef(new Set<string>());
+  const freshText = useRef<Record<string, { title: string; content: string }>>({});
+  const draftTags = useRef('');
   const notesById = useRef(new Map<string, Note>());
   const baseUpdated = useRef<Record<string, number>>({});
   const conflicts = useRef<Record<string, Note>>({});
@@ -490,13 +500,20 @@ export default function Home() {
     const now2 = Date.now();
     const existing = notesById.current.get(id);
 
+    if (freshIds.current.has(id)) {
+      const prev = freshText.current[id] ?? existing ?? draftRef.current ?? { title: '', content: '' };
+      freshText.current[id] = { title: patch.title ?? prev.title, content: patch.content ?? prev.content };
+    }
+
     if (!existing && !persisted.current.has(id)) {
       const draft = draftRef.current;
       if (!draft || draft.id !== id) return;
       const next: Note = { ...draft, ...patch };
       draftRef.current = next;
-      const hasContent = next.title.trim() || plainText(next.content) || next.tags.length || /<(img|hr|li)/i.test(next.content);
-      if (!hasContent) return;
+      // Nothing typed yet (an empty bullet/checklist or the folder/tag it was created in
+      // doesn't count): keep it as an unsaved draft.
+      const changed = !isBlankNote(next.title, next.content) || next.tags.join('\n') !== draftTags.current;
+      if (!changed) return;
       persisted.current.add(id);
       baseUpdated.current[id] = now2;
       const { id: _id, ...data } = next;
@@ -701,7 +718,10 @@ export default function Home() {
       setMobileEditorOpen(layers.current.includes('editor'));
       setSidebarOpen(layers.current.includes('drawer'));
       setMenu(null);
-      if (!layers.current.includes('editor')) actions.current.flush();
+      if (!layers.current.includes('editor') && actions.current.flush) {
+        actions.current.flush();
+        if (compactRef.current) actions.current.discardEmptyDraft();
+      }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -715,6 +735,7 @@ export default function Home() {
 
   function closeEditor() {
     flush();
+    discardEmptyDraft();
     closeLayers(['editor']);
   }
 
@@ -728,12 +749,26 @@ export default function Home() {
     else setSidebarCollapsed(c => !c);
   }
 
+  /** Called when leaving a note: drops a never-saved draft, and deletes a new note
+   *  from this session that was saved but has since been emptied again. */
   function discardEmptyDraft(exceptId?: string) {
     const draft = draftRef.current;
     if (draft && draft.id !== exceptId && !persisted.current.has(draft.id)) {
       draftRef.current = null;
       setDraftNote(null);
     }
+    const blank: string[] = [];
+    for (const id of Array.from(freshIds.current)) {
+      if (id === exceptId) continue;
+      freshIds.current.delete(id); // once left with text, it's an ordinary note
+      const text = freshText.current[id];
+      delete freshText.current[id];
+      const note = notesById.current.get(id);
+      if (!persisted.current.has(id) && !note) continue;
+      if (note && (note.deleted || note.pinned || note.archived)) continue;
+      if (text && isBlankNote(text.title, text.content)) blank.push(id);
+    }
+    if (blank.length) hardDelete(blank);
   }
 
   function selectNote(id: string) {
@@ -769,6 +804,9 @@ export default function Home() {
       createdAt: time, updatedAt: time, deviceId: deviceId.current,
     };
     draftRef.current = draft;
+    draftTags.current = draft.tags.join('\n');
+    freshIds.current.add(id);
+    freshText.current[id] = { title: draft.title, content: draft.content };
     setDraftNote(draft);
     if (view === 'trash' || view === 'archive' || view === 'pinned') setView('all');
     setSearch('');
@@ -1385,7 +1423,7 @@ export default function Home() {
   }
 
   // Keep long-lived callbacks pointing at the latest closures.
-  actions.current = { flush, scheduleSave, createNote, hardDelete, onKey, drainQueuedLayers };
+  actions.current = { flush, scheduleSave, createNote, hardDelete, onKey, drainQueuedLayers, discardEmptyDraft };
 
   /* ───────────── commands for the palette ───────────── */
 
@@ -2085,7 +2123,7 @@ export default function Home() {
         onChange={event => importFiles(event.target.files)}
       />
 
-      {menu && <Menu items={menuItems(menu)} anchor={'anchor' in menu ? menu.anchor : undefined} point={'point' in menu ? menu.point : undefined} onClose={closeMenu} width={menu.kind === 'account' ? 240 : 220}/>}
+      {menu && <Menu key={menu.kind + ('id' in menu ? menu.id : '')} items={menuItems(menu)} anchor={'anchor' in menu ? menu.anchor : undefined} point={'point' in menu ? menu.point : undefined} onClose={closeMenu} width={menu.kind === 'account' ? 240 : 220}/>}
 
       {dialog && <Dialog request={dialog} onDone={() => setDialog(null)}/>}
 

@@ -23,34 +23,27 @@ export function Menu({ items, anchor, point, onClose, width = 210, label }: {
   label?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number; scrolls: boolean } | null>(null);
 
+  // Place the menu from an estimate of its size so it is painted once, already in place.
+  // (iOS Safari would not paint the text of a menu that was first laid out hidden /
+  // off-screen and then moved and revealed — only the icons showed.)
+  const [size, setSize] = useState(() => estimateSize(items, width));
+  const pos = place(size, anchor, point);
+  const scrolls = size.h > viewportHeight() - 16;
+
+  // Correct the estimate with the real size (rarely differs by more than a few px).
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const vw = window.innerWidth;
-    const vh = window.visualViewport?.height ?? window.innerHeight;
-    const { offsetWidth: w, offsetHeight: h } = el;
-    let left: number;
-    let top: number;
-    if (point) {
-      left = point.x;
-      top = point.y;
-    } else if (anchor) {
-      const r = anchor.getBoundingClientRect();
-      left = r.right - w;
-      top = r.bottom + 6;
-      if (left < 8) left = r.left;
-      if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
-    } else {
-      left = (vw - w) / 2;
-      top = (vh - h) / 2;
-    }
-    left = Math.max(8, Math.min(left, vw - w - 8));
-    top = Math.max(8, Math.min(top, vh - h - 8));
-    setPos({ left, top, scrolls: h > vh - 16 });
-    el.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
-  }, [anchor, point]);
+    const h = el.scrollHeight;
+    if (Math.abs(h - size.h) > 1) setSize({ w: width, h });
+  }, [items.length, width]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard users start on the first item (not on touch, where focus can make iOS scroll).
+  useEffect(() => {
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+    ref.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const onPointer = (event: PointerEvent) => {
@@ -86,10 +79,10 @@ export function Menu({ items, anchor, point, onClose, width = 210, label }: {
   return createPortal(
     <div
       ref={ref}
-      className={`popover-menu ${pos?.scrolls ? 'scrolls' : ''}`}
+      className={`popover-menu ${scrolls ? 'scrolls' : ''}`}
       role="menu"
       aria-label={label}
-      style={{ width, left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
+      style={{ width, left: pos.left, top: pos.top }}
       onKeyDown={onKeyDown}
       onContextMenu={event => event.preventDefault()}
     >
@@ -116,4 +109,42 @@ export function Menu({ items, anchor, point, onClose, width = 210, label }: {
     </div>,
     document.body,
   );
+}
+
+const viewportHeight = () => (typeof window === 'undefined' ? 800 : window.visualViewport?.height ?? window.innerHeight);
+
+function estimateSize(items: MenuItem[], width: number) {
+  const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  let h = 10; // padding
+  for (const item of items) {
+    if ('divider' in item) h += 11;
+    else if ('heading' in item) h += 26;
+    else h += coarse ? 44 : 32;
+  }
+  return { w: width, h };
+}
+
+function place(size: { w: number; h: number }, anchor?: HTMLElement | null, point?: { x: number; y: number }) {
+  const vw = typeof window === 'undefined' ? 1024 : window.innerWidth;
+  const vh = viewportHeight();
+  const { w, h } = size;
+  let left: number;
+  let top: number;
+  if (point) {
+    left = point.x;
+    top = point.y;
+  } else if (anchor) {
+    const r = anchor.getBoundingClientRect();
+    left = r.right - w;
+    top = r.bottom + 6;
+    if (left < 8) left = r.left;
+    if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
+  } else {
+    left = (vw - w) / 2;
+    top = (vh - h) / 2;
+  }
+  return {
+    left: Math.max(8, Math.min(left, vw - w - 8)),
+    top: Math.max(8, Math.min(top, vh - h - 8)),
+  };
 }

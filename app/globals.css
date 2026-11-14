@@ -635,7 +635,6 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   animation: menu-in .12s ease-out;
 }
 @keyframes menu-in { from { opacity: 0; transform: scale(.97); } }
-@keyframes menu-fade { from { opacity: 0; } }
 .popover-menu button {
   width: 100%; min-height: 32px;
   border: 0; background: transparent; border-radius: 6px;
@@ -647,7 +646,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .popover-menu button.danger { color: var(--danger); }
 .popover-menu button:disabled { opacity: .4; }
 .menu-icon { width: 16px; display: grid; place-items: center; flex: 0 0 16px; color: inherit; opacity: .85; }
-.menu-label { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; -webkit-text-fill-color: currentColor; }
+.menu-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-divider { height: 1px; background: var(--line); margin: 5px 6px; }
 .menu-heading { padding: 7px 9px 4px; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -828,11 +827,14 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
     background: var(--panel);
     -webkit-backdrop-filter: none; backdrop-filter: none;
     overflow-y: visible;
-    animation-name: menu-fade;
+    animation: none;
     -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
   }
   .popover-menu.scrolls { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  /* Plain text runs on touch (no clipping layer around each label); long names wrap. */
+  .popover-menu .menu-label, .popover-menu .menu-heading { overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; }
+  .popover-menu button { padding-block: 6px; }
   .note-card { padding: 13px 13px 11px; }
   .note-card-title { font-size: 15px; }
   .note-preview { font-size: 13.5px; }
